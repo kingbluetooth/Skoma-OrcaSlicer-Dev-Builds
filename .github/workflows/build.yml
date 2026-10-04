@@ -27,6 +27,15 @@ jobs:
           fetch-depth: 0
           lfs: false
 
+      - name: Remove macOS OpenCV patches
+        working-directory: source
+        shell: pwsh
+        run: |
+          $file = "deps\\OpenCV\\OpenCV.cmake"
+          $content = Get-Content $file -Raw
+          $content = $content.Replace(' ${CMAKE_CURRENT_LIST_DIR}/0002-clang19-macos.patch ${CMAKE_CURRENT_LIST_DIR}/0003-libpng-macos-arm64-neon.patch', '')
+          Set-Content -Path $file -Value $content -NoNewline
+
       - name: Get source build information
         id: info
         working-directory: source
@@ -74,9 +83,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: source/deps/build
-          key: ${{ runner.os }}-x64-msvc-deps-${{ hashFiles('source/deps/**', 'source/build_win.bat') }}
-          restore-keys: |
-            ${{ runner.os }}-x64-msvc-deps-
+          key: ${{ runner.os }}-x64-msvc-deps-windows-v2-${{ hashFiles('source/deps/**', 'source/build_win.bat') }}
 
       - name: Build dependencies
         working-directory: source
@@ -92,8 +99,6 @@ jobs:
         with:
           path: source/build
           key: ${{ runner.os }}-x64-msvc-orca-${{ steps.info.outputs.sha }}
-          restore-keys: |
-            ${{ runner.os }}-x64-msvc-orca-
 
       - name: Build OrcaSlicer
         working-directory: source
