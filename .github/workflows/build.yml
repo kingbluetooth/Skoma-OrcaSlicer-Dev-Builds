@@ -1,0 +1,158 @@
+name: Build CraftBot OrcaSlicer
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_ref:
+        description: "Skoma93/OrcaSlicer branch, tag, or commit to build"
+        required: true
+        default: cu-dev2
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    name: Build Windows x64
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout CraftBot OrcaSlicer
+        uses: actions/checkout@v7
+        with:
+          repository: Skoma93/OrcaSlicer
+          ref: ${{ inputs.source_ref }}
+          path: source
+          fetch-depth: 0
+          lfs: false
+
+      - name: Get source build information
+        id: info
+        working-directory: source
+        shell: pwsh
+        run: |
+          $sha = git rev-parse HEAD
+          $shortSha = $sha.Substring(0, 7)
+          $sourceRef = "${{ inputs.source_ref }}"
+          $versionContent = Get-Content version.inc -Raw
+
+          if ($versionContent -match 'set\(SoftFever_VERSION "(.*?)"\)') {
+            $version = $matches[1]
+          } else {
+            throw "Could not determine SoftFever_VERSION from version.inc"
+          }
+
+          "sha=$sha" >> $env:GITHUB_OUTPUT
+          "short_sha=$shortSha" >> $env:GITHUB_OUTPUT
+          "version=$version" >> $env:GITHUB_OUTPUT
+          "source_ref=$sourceRef" >> $env:GITHUB_OUTPUT
+
+          Write-Host "Source ref : $sourceRef"
+          Write-Host "Commit     : $sha"
+          Write-Host "Version    : $version"
+
+      - name: Setup CMake
+        uses: lukka/get-cmake@latest
+        with:
+          cmakeVersion: "~4.3.0"
+          useLocalCache: true
+          useCloudCache: true
+
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v3
+
+      - name: Install build prerequisites
+        shell: pwsh
+        run: |
+          choco install strawberryperl nsis -y
+
+      - name: Build dependencies
+        working-directory: source
+        shell: pwsh
+        run: |
+          cmd /c "build_win.bat -d --arch x64 --build-dir build --msvc --msbuild"
+
+      - name: Build OrcaSlicer
+        working-directory: source
+        shell: pwsh
+        run: |
+          cmd /c "build_win.bat -s -i --arch x64 --build-dir build --msvc --msbuild"
+
+      - name: Build system preset cache
+        working-directory: source
+        shell: cmd
+        run: |
+          scripts\build_preset_cache.bat --prune-source "build" "resources\profiles" "build\OrcaSlicer\resources\profiles"
+
+      - name: Create Windows installer
+        working-directory: source\build
+        shell: pwsh
+        run: |
+          cpack -G NSIS
+
+      - name: Create portable ZIP
+        working-directory: source
+        shell: pwsh
+        run: |
+          $zip = "OrcaSlicerForCraftbot_Windows_${{ steps.info.outputs.version }}_${{ steps.info.outputs.short_sha }}_portable.zip"
+          & "$env:GITHUB_WORKSPACE\source\tools\7z.exe" a -tzip "$env:GITHUB_WORKSPACE\source\build\$zip" "$env:GITHUB_WORKSPACE\source\build\OrcaSlicer"
+          if ($LASTEXITCODE -ne 0) {
+            throw "7-Zip failed with exit code $LASTEXITCODE"
+          }
+
+      - name: Verify release files
+        working-directory: source\build
+        shell: pwsh
+        run: |
+          $installer = Get-ChildItem -File -Filter "OrcaSlicerForCraftbot_Windows_Installer_*.exe"
+          $portable = Get-ChildItem -File -Filter "OrcaSlicerForCraftbot_Windows_*_portable.zip"
+
+          if (-not $installer) {
+            throw "Windows installer was not produced."
+          }
+
+          if (-not $portable) {
+            throw "Portable ZIP was not produced."
+          }
+
+          Write-Host "Installer:"
+          $installer | Select-Object Name, Length | Format-Table | Out-Host
+
+          Write-Host "Portable:"
+          $portable | Select-Object Name, Length | Format-Table | Out-Host
+
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: CraftBot-OrcaSlicer-Windows-x64-Installer
+          path: source\build\OrcaSlicerForCraftbot_Windows_Installer_*.exe
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload portable artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: CraftBot-OrcaSlicer-Windows-x64-Portable
+          path: source\build\OrcaSlicerForCraftbot_Windows_*_portable.zip
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: craftbot-${{ steps.info.outputs.version }}-${{ steps.info.outputs.short_sha }}-${{ github.run_number }}
+          name: CraftBot OrcaSlicer ${{ steps.info.outputs.version }} (${{ steps.info.outputs.source_ref }})
+          prerelease: true
+          generate_release_notes: true
+          body: |
+            Automated Windows x64 build of the CraftBot OrcaSlicer source.
+
+            Source repository: https://github.com/Skoma93/OrcaSlicer
+            Source ref: `${{ steps.info.outputs.source_ref }}`
+            Source commit: `${{ steps.info.outputs.sha }}`
+
+            Built by this repository's GitHub Actions workflow.
+          files: |
+            source\build\OrcaSlicerForCraftbot_Windows_Installer_*.exe
+            source\build\OrcaSlicerForCraftbot_Windows_*_portable.zip
