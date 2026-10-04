@@ -67,11 +67,33 @@ jobs:
         run: |
           choco install strawberryperl nsis -y
 
+      # Cache the compiled dependency tree separately from OrcaSlicer's own
+      # build tree. Dependency versions are defined by the dependency source;
+      # changing OrcaSlicer source does not require rebuilding them.
+      - name: Restore dependency build cache
+        uses: actions/cache@v4
+        with:
+          path: source/deps/build
+          key: ${{ runner.os }}-x64-msvc-deps-${{ hashFiles('source/deps/**', 'source/build_win.bat') }}
+          restore-keys: |
+            ${{ runner.os }}-x64-msvc-deps-
+
       - name: Build dependencies
         working-directory: source
         shell: pwsh
         run: |
           cmd /c "build_win.bat -d --arch x64 --build-dir build --msvc --msbuild"
+
+      # This cache is keyed to the exact source commit because CMake object
+      # files and generated build metadata must not be reused across unrelated
+      # OrcaSlicer source revisions.
+      - name: Restore OrcaSlicer build cache
+        uses: actions/cache@v4
+        with:
+          path: source/build
+          key: ${{ runner.os }}-x64-msvc-orca-${{ steps.info.outputs.sha }}
+          restore-keys: |
+            ${{ runner.os }}-x64-msvc-orca-
 
       - name: Build OrcaSlicer
         working-directory: source
@@ -149,8 +171,8 @@ jobs:
             Automated Windows x64 build of the CraftBot OrcaSlicer source.
 
             Source repository: https://github.com/Skoma93/OrcaSlicer
-            Source ref: `${{ steps.info.outputs.source_ref }}`
-            Source commit: `${{ steps.info.outputs.sha }}`
+            Source ref: \`${{ steps.info.outputs.source_ref }}\`
+            Source commit: \`${{ steps.info.outputs.sha }}\`
 
             Built by this repository's GitHub Actions workflow.
           files: |
