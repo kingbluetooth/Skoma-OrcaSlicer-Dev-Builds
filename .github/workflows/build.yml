@@ -123,7 +123,7 @@ jobs:
         shell: pwsh
         run: |
           $zip = "OrcaSlicerForCraftbot_Windows_${{ steps.info.outputs.version }}_${{ steps.info.outputs.short_sha }}_portable.zip"
-          & "$env:GITHUB_WORKSPACE\source\tools\7z.exe" a -tzip "$env:GITHUB_WORKSPACE\source\build\$zip" "$env:GITHUB_WORKSPACE\source\build\OrcaSlicer"
+          & "$env:GITHUB_WORKSPACE\source\tools\7z.exe" a -tzip "$env:GITHUB_WORKSPACE\source\build\$zip" "$env:GITHUB_WORKSPACE\source\build\OrcaSlicerForCraftbot"
           if ($LASTEXITCODE -ne 0) {
             throw "7-Zip failed with exit code $LASTEXITCODE"
           }
