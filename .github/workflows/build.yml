@@ -110,7 +110,7 @@ jobs:
         working-directory: source
         shell: cmd
         run: |
-          scripts\build_preset_cache.bat --prune-source "build" "resources\profiles" "build\OrcaSlicer\resources\profiles"
+          scripts\build_preset_cache.bat --prune-source "build" "resources\profiles"
 
       - name: Create Windows installer
         working-directory: source\build
