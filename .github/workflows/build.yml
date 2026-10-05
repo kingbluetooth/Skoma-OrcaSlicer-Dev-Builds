@@ -43,6 +43,8 @@ jobs:
         run: |
           $sha = git rev-parse HEAD
           $shortSha = $sha.Substring(0, 7)
+          $depsTree = git rev-parse HEAD:deps
+          $buildScriptSha = git rev-parse HEAD:build_win.bat
           $sourceRef = "${{ inputs.source_ref }}"
           $versionContent = Get-Content version.inc -Raw
 
@@ -54,6 +56,8 @@ jobs:
 
           "sha=$sha" >> $env:GITHUB_OUTPUT
           "short_sha=$shortSha" >> $env:GITHUB_OUTPUT
+          "deps_tree=$depsTree" >> $env:GITHUB_OUTPUT
+          "build_script_sha=$buildScriptSha" >> $env:GITHUB_OUTPUT
           "version=$version" >> $env:GITHUB_OUTPUT
           "source_ref=$sourceRef" >> $env:GITHUB_OUTPUT
 
@@ -83,7 +87,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: source/deps/build
-          key: ${{ runner.os }}-x64-msvc-deps-windows-v2-${{ hashFiles('source/deps/**', 'source/build_win.bat') }}
+          key: ${{ runner.os }}-x64-msvc-deps-windows-v3-${{ steps.info.outputs.deps_tree }}-${{ steps.info.outputs.build_script_sha }}
 
       - name: Build dependencies
         working-directory: source
