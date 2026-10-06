@@ -9,6 +9,10 @@ on:
         default: cu-dev2
         type: string
 
+concurrency:
+  group: ${{ github.workflow }}-${{ inputs.source_ref }}
+  cancel-in-progress: false
+
 permissions:
   contents: write
 
@@ -36,12 +40,23 @@ jobs:
           echo "Source SHA : ${source_sha}"
           echo "Release tag: ${release_tag}"
 
+          existing_tag=""
           if gh api "repos/${{ github.repository }}/releases/tags/${release_tag}" >/dev/null 2>&1; then
-            echo "A release already exists for this exact OrcaSlicer commit. Nothing to build."
+            existing_tag="${release_tag}"
+          else
+            # Also recognize releases created by the previous run-number tag scheme.
+            # The source SHA is recorded in every release body.
+            existing_tag="$(gh api --paginate --slurp "repos/${{ github.repository }}/releases?per_page=100" |
+              jq -r --arg sha "${source_sha}" '.[][] | select((.body // "") | contains($sha)) | .tag_name' |
+              head -n 1)"
+          fi
+
+          if [[ -n "${existing_tag}" ]]; then
+            echo "Release ${existing_tag} already exists for OrcaSlicer commit ${source_sha}. Nothing to build."
             echo "source_sha=${source_sha}" >> "$GITHUB_OUTPUT"
             echo "should_build=false" >> "$GITHUB_OUTPUT"
           else
-            echo "No release exists for this OrcaSlicer commit. Build required."
+            echo "No release exists for OrcaSlicer commit ${source_sha}. Build required."
             echo "source_sha=${source_sha}" >> "$GITHUB_OUTPUT"
             echo "should_build=true" >> "$GITHUB_OUTPUT"
           fi
@@ -119,7 +134,7 @@ jobs:
       # build tree. Dependency versions are defined by the dependency source;
       # changing OrcaSlicer source does not require rebuilding them.
       - name: Restore dependency build cache
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: source/deps/build
           key: ${{ runner.os }}-x64-msvc-deps-windows-v3-${{ steps.info.outputs.deps_tree }}-${{ steps.info.outputs.build_script_sha }}
@@ -205,7 +220,7 @@ jobs:
           retention-days: 30
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: craftbot-${{ needs.check-source.outputs.source_sha }}
           name: CraftBot OrcaSlicer ${{ steps.info.outputs.version }} (${{ steps.info.outputs.source_ref }})
