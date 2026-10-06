@@ -13,8 +13,43 @@ permissions:
   contents: write
 
 jobs:
+  check-source:
+    name: Check source
+    runs-on: ubuntu-latest
+    outputs:
+      source_sha: ${{ steps.check.outputs.source_sha }}
+      should_build: ${{ steps.check.outputs.should_build }}
+
+    steps:
+      - name: Resolve source and check release
+        id: check
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          source_sha="$(gh api "repos/Skoma93/OrcaSlicer/commits/${{ inputs.source_ref }}" --jq '.sha')"
+          release_tag="craftbot-${source_sha}"
+
+          echo "Source ref : ${{ inputs.source_ref }}"
+          echo "Source SHA : ${source_sha}"
+          echo "Release tag: ${release_tag}"
+
+          if gh api "repos/${{ github.repository }}/releases/tags/${release_tag}" >/dev/null 2>&1; then
+            echo "A release already exists for this exact OrcaSlicer commit. Nothing to build."
+            echo "source_sha=${source_sha}" >> "$GITHUB_OUTPUT"
+            echo "should_build=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "No release exists for this OrcaSlicer commit. Build required."
+            echo "source_sha=${source_sha}" >> "$GITHUB_OUTPUT"
+            echo "should_build=true" >> "$GITHUB_OUTPUT"
+          fi
+
   build-windows:
     name: Build Windows x64
+    needs: check-source
+    if: needs.check-source.outputs.should_build == 'true'
     runs-on: windows-latest
 
     steps:
@@ -84,7 +119,7 @@ jobs:
       # build tree. Dependency versions are defined by the dependency source;
       # changing OrcaSlicer source does not require rebuilding them.
       - name: Restore dependency build cache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: source/deps/build
           key: ${{ runner.os }}-x64-msvc-deps-windows-v3-${{ steps.info.outputs.deps_tree }}-${{ steps.info.outputs.build_script_sha }}
@@ -172,7 +207,7 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: craftbot-${{ steps.info.outputs.version }}-${{ steps.info.outputs.short_sha }}-${{ github.run_number }}
+          tag_name: craftbot-${{ needs.check-source.outputs.source_sha }}
           name: CraftBot OrcaSlicer ${{ steps.info.outputs.version }} (${{ steps.info.outputs.source_ref }})
           prerelease: false
           generate_release_notes: true
