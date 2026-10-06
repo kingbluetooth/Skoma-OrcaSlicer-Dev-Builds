@@ -174,7 +174,7 @@ jobs:
         with:
           tag_name: craftbot-${{ steps.info.outputs.version }}-${{ steps.info.outputs.short_sha }}-${{ github.run_number }}
           name: CraftBot OrcaSlicer ${{ steps.info.outputs.version }} (${{ steps.info.outputs.source_ref }})
-          prerelease: true
+          prerelease: false
           generate_release_notes: true
           body: |
             Automated Windows x64 build of the CraftBot OrcaSlicer source.
