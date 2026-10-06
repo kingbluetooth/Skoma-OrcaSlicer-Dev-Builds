@@ -149,7 +149,7 @@ jobs:
       # files and generated build metadata must not be reused across unrelated
       # OrcaSlicer source revisions.
       - name: Restore OrcaSlicer build cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: source/build
           key: ${{ runner.os }}-x64-msvc-orca-${{ steps.info.outputs.sha }}
